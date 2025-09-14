@@ -1,0 +1,14 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start backend with nodemon",
+			"type": "shell",
+			"command": "npx nodemon server.js",
+			"args": [],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

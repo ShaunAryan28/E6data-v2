@@ -1,0 +1,257 @@
+.leaderboard {
+  background: var(--terminal-surface);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border: 2px solid var(--terminal-border);
+}
+
+.leaderboard-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.leaderboard-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--terminal-accent);
+  margin: 0 0 0.5rem 0;
+}
+
+.leaderboard-subtitle {
+  color: var(--terminal-text-dim);
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.leaderboard-controls {
+  margin-bottom: 2rem;
+  display: flex;
+  justify-content: center;
+}
+
+.search-container {
+  position: relative;
+  max-width: 400px;
+  width: 100%;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 3rem;
+  border: 2px solid var(--terminal-border);
+  border-radius: 12px;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  background: var(--gray-100);
+  color: var(--terminal-text);
+  font-family: var(--font-mono);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--terminal-accent);
+  background: var(--terminal-surface);
+  box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.1);
+}
+
+.search-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.1rem;
+  color: #a0aec0;
+}
+
+.chart-container {
+  margin-bottom: 2rem;
+  background: var(--gray-100);
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 2px solid var(--terminal-border);
+}
+
+.chart-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--terminal-text);
+  margin: 0 0 1rem 0;
+  text-align: center;
+}
+
+.chart-wrapper {
+  background: var(--terminal-surface);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.table-container {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 2px solid var(--terminal-border);
+}
+
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--terminal-surface);
+}
+
+.table-header {
+  background: var(--terminal-accent);
+  color: var(--terminal-bg);
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  font-family: var(--font-mono);
+}
+
+.table-header.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease;
+}
+
+.table-header.sortable:hover {
+  background: var(--terminal-accent-dim);
+}
+
+.table-row {
+  transition: background-color 0.2s ease;
+}
+
+.table-row:nth-child(even) {
+  background: var(--gray-100);
+}
+
+.table-row:hover {
+  background: var(--gray-200);
+}
+
+.table-cell {
+  padding: 1rem;
+  border-bottom: 1px solid var(--terminal-border);
+  vertical-align: middle;
+}
+
+.agent-cell {
+  font-weight: 600;
+  color: var(--terminal-text);
+  font-family: var(--font-mono);
+}
+
+.agent-name {
+  font-size: 1rem;
+}
+
+.score-cell {
+  text-align: center;
+  font-family: var(--font-mono);
+}
+
+.score-value {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.loading-placeholder {
+  padding: 2rem;
+  text-align: center;
+}
+
+.loading-skeleton {
+  width: 100%;
+  height: 200px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 8px;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #718096;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.empty-message {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #4a5568;
+  margin: 0 0 0.5rem 0;
+}
+
+.empty-subtitle {
+  font-size: 1rem;
+  margin: 0;
+  opacity: 0.8;
+}
+
+@media (max-width: 768px) {
+  .leaderboard {
+    padding: 1.5rem;
+  }
+  
+  .leaderboard-title {
+    font-size: 1.75rem;
+  }
+  
+  .chart-container {
+    padding: 1rem;
+  }
+  
+  .table-cell {
+    padding: 0.75rem 0.5rem;
+  }
+  
+  .table-header {
+    padding: 0.75rem 0.5rem;
+    font-size: 0.85rem;
+  }
+  
+  .score-value {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .leaderboard {
+    padding: 1rem;
+  }
+  
+  .chart-wrapper {
+    padding: 0.5rem;
+  }
+  
+  .table-cell {
+    padding: 0.5rem 0.25rem;
+  }
+  
+  .table-header {
+    padding: 0.5rem 0.25rem;
+    font-size: 0.8rem;
+  }
+}
