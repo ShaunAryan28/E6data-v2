@@ -1,311 +1,180 @@
-# E6data Evaluation Platform
+npm start
+npm start
+# E6data Evaluation Platform (Simplified Overview)
 
-Comprehensive local-first framework to generate AI model responses in batches, evaluate them across multiple quality dimensions, fuse heuristic and LLM judgments, and visualize aggregated performance (leaderboard + recent evaluations UI).
-
----
-## Table of Contents
-1. Overview
-2. Key Features
-3. High-Level Architecture
-4. End-to-End Flow (Request → Scores → UI)
-5. Scoring Dimensions & Semantics
-6. Heuristic Feature Extraction
-7. LLM Judging Layer
-8. Fusion Algorithm (Hybrid Scoring)
-9. Data Models & Persistence
-10. API Surface
-11. Frontend UX Flow
-12. Environment Variables
-13. Local Development & Setup
-14. Typical Usage Walkthrough
-15. Extensibility Guide
-16. Operational Considerations & Tuning
-17. Troubleshooting (Generation / LM Studio)
-18. Roadmap Ideas
-19. License / Attribution
+Focused documentation covering only what you asked for: setup, execution flow, and a thorough explanation of scoring & judging (heuristics, LLM layer, fusion, and inversion logic). All environment variable specifics and extended operational sections have been intentionally removed.
 
 ---
-## 1. Overview
-This project evaluates large batches of model ("agent") responses using a **hybrid evaluation pipeline**:
-- Deterministic heuristic signals (fast, low cost)
-- LLM-based semantic judging (context-aware)
-- Confidence-weighted fusion producing stable final scores
+## 1. Setup (Minimal)
+Prerequisites:
+- Node.js (LTS)
+- MongoDB running locally (or a configured remote URI in backend config)
+- A local OpenAI-compatible model server (e.g., LM Studio) already running
 
-The platform targets fast iteration when experimenting with prompt strategies, temperature settings, or agent variants using only a **local OpenAI-compatible provider** (e.g., LM Studio).
-
----
-## 2. Key Features
-- Batch generation with retry/backoff for local model
-- Multi-dimensional evaluation: Instruction, Hallucination, Assumption, Coherence
-- Heuristic feature extraction for structural/lexical signals
-- LLM semantic scoring with JSON parsing safeguards
-- Adaptive fusion weighting (balances noisy vs stable signals)
-- Aggregated batch metrics + per-item details
-- Leaderboard view for comparing agents
-- Recent evaluations interactive panel
-- Environment-driven configuration (timeouts, retries, model, base URL)
-
----
-## 3. High-Level Architecture
+Install & run:
 ```
-Frontend (React)
-  ├── BatchEvaluation (generate + evaluate)
-  ├── RecentEvaluations (latest + expandable history)
-  ├── Leaderboard (aggregated agent rankings)
-  └── MetricCard components
+cd backend
+npm install
+npm start
 
-Backend (Node + Express)
-  ├── routes/generate.js  (local provider integration)
-  ├── routes/evaluate.js  (batch + single evaluation)
-  ├── eval/featureExtractor.js (heuristics)
-  ├── eval/hybridJudge.js (LLM judging orchestrator)
-  ├── eval/fusion.js (heuristic + LLM blending)
-  ├── services/llmjudge.js (LLM call abstraction)
-  ├── models/*.js (Mongo schemas)
-  └── config/db.js (database connection)
-
-Local LLM Provider (LM Studio or compatible)
-  • /chat/completions endpoint (JSON)
+cd ../frontend
+npm install
+npm start
 ```
+Open the frontend in your browser (default CRA dev port) and begin batch evaluations.
 
 ---
-## 4. End-to-End Flow (Request → Scores → UI)
-1. User enters a prompt + parameters (temperature, max tokens) in the frontend.
-2. Frontend calls `POST /api/generate/batch` with count N.
-3. Backend generates N responses (retry logic, timing stats).
-4. Frontend calls `POST /api/evaluate/batch` with returned items.
-5. Evaluation pipeline executes for each item:
-   - Heuristic extraction → raw dimension estimates
-   - LLM judge → semantic dimension JSON
-   - Fusion → final normalized scores (0–1)
-   - Item persisted (or stored as part of a BatchResult document)
-6. Aggregates computed (mean per dimension) → returned to frontend.
-7. UI updates: Metric cards (aggregate), leaderboard (historical), recent evaluations (latest batch & details).
+## 2. Flow (End‑to‑End)
+1. User supplies: prompt, batch size, generation parameters (temperature, max tokens).
+2. Frontend sends batch generation request → backend loops N times calling local model.
+3. Generated items (prompt + response per agent) are returned to the frontend.
+4. Frontend immediately submits those items to the evaluation endpoint.
+5. For each item the evaluation pipeline runs:
+   - Heuristic feature extraction → numeric signals mapped to preliminary dimension scores.
+   - LLM judging → semantic dimension scores parsed from structured output.
+   - Fusion → combines heuristic and LLM scores into final fused scores per dimension.
+6. Aggregate (mean) scores are computed over the batch and returned.
+7. UI updates metric cards (aggregate), leaderboard (historical comparative view), and recent evaluations (expandable list with details).
+
+Visualization Conventions:
+- All displayed metrics are normalized to a 0–1 scale.
+- Hallucination is inverted for display (explained below) so every card uses a higher-is-better mental model.
 
 ---
-## 5. Scoring Dimensions & Semantics
-| Dimension | Higher Value Implies | Core Risk Captured |
-|-----------|---------------------|--------------------|
-| Instruction (instruction) | Better prompt adherence | Ignoring or partially following instructions |
-| Hallucination (hallucination) | (Raw) More hallucination risk (inverted in UI) | Fabricated or off-prompt content |
-| Assumption (assumption) | Fewer unsupported assumptions | Speculative additions not grounded in prompt |
-| Coherence (coherence) | Strong logical / structural clarity | Disjointed phrasing, contradictions, abrupt shifts |
+## 3. Scoring Dimensions
+| Dimension | Meaning (Higher Implies) | Underlying Risk / Problem Area |
+|-----------|--------------------------|--------------------------------|
+| Instruction | Stronger adherence to the given prompt directives | Omission, ignoring constraints |
+| Hallucination (raw) | (Higher raw = more speculative / fabricated content) | Fabrication, off-prompt assertions |
+| Hallucination Control (displayed) | 1 - raw hallucination (Higher = fewer hallucinations) | Ensures consistent “higher is better” UI semantics |
+| Assumption | Fewer unsupported leaps beyond provided info | Unwarranted speculation / implicit claims |
+| Coherence | Logical, well-structured, smooth narrative flow | Fragmentation, contradictions, incoherence |
 
-UI Normalization: The raw hallucination score (risk) is inverted for display: `Hallucination Control = 1 - hallucination` so that all displayed metrics are **higher-is-better**.
-
----
-## 6. Heuristic Feature Extraction (`eval/featureExtractor.js`)
-Representative feature signals (not exhaustive):
-- coverage: Fraction of prompt key tokens reused (instruction alignment)
-- extraRatio: Tokens not correlated with prompt (hallucination tendency)
-- numPenalty: Suspicious numeric proliferation
-- speculativeDensity: Density of modal / speculative constructs
-- variation: Sentence length variance (structure stability)
-- contradictionMarkers: Presence of adversative connectors implying drift
-- shortRatio: Low-information short sentence share
-- unresolvedPronounsRatio: Pronouns with unclear referents (coherence risk)
-
-Each is normalized to [0,1] and mapped into preliminary dimension scores.
-
----
-## 7. LLM Judging Layer (`services/llmjudge.js` / `eval/hybridJudge.js`)
-The LLM judge receives a compact JSON-oriented rubric prompt with the original prompt + response and must return structured dimension scores (0–1). Safeguards:
-- Temperature kept moderate for stability
-- JSON parsing fallback / validation
-- Optional retries (if provider unstable)
-
-LLM outputs may include an `explanation` or rationale. Low-confidence or invalid responses can be flagged for future active-learning improvements.
-
----
-## 8. Fusion Algorithm (`eval/fusion.js`)
-Purpose: Combine stable but shallow heuristics with richer but sometimes noisy LLM scores.
-
-Pseudocode (from `EVALUATION_FRAMEWORK.md`):
+Display Transformation:
 ```
-flat = all LLM scores identical?
+Hallucination Control = 1 - rawHallucination
+```
+This prevents user confusion by aligning all progress bars and qualitative labels (Excellent → Poor) on the same directional axis.
+
+---
+## 4. Heuristic Layer (Feature Extraction)
+Core idea: Fast lexical & structural analysis creates **cheap priors** for each dimension before invoking semantic judgment. Representative features include:
+- coverage: Overlap between prompt salient tokens and response (instruction alignment)
+- extraRatio: Proportion of tokens not traceable to prompt context (hallucination risk proxy)
+- numPenalty: Excess numeric tokens (may indicate invented stats)
+- speculativeDensity: Frequency of speculative/modal phrases (“might”, “could”, “probably”) → assumption risk
+- variation: Sentence length variance (extremes can reduce coherence or indicate drift)
+- contradictionMarkers: Connectors suggesting shifts (“however”, “but”) → used cautiously to flag potential divergence
+- shortRatio: Ratio of very short sentences (can signal low information density)
+- unresolvedPronounsRatio: Pronouns lacking antecedents (coherence risk)
+
+Mapping: Each raw feature → normalized (0–1) → assigned to dimension-specific weightings to form preliminary dimension scores (heuristic_dim).
+
+Limitations: Heuristics alone can misclassify domain‑specific content; they avoid semantic interpretation and only provide structural signal.
+
+---
+## 5. LLM Judging Layer
+Purpose: Capture **semantic correctness, contextual fidelity, and nuanced coherence** beyond pattern surface features.
+
+Process:
+1. Construct judging prompt containing: original prompt + response + rubric specifying the four dimensions.
+2. Ask model to return structured JSON: `{ instruction, hallucination, assumption, coherence, explanation? }` each within [0,1].
+3. Parse JSON safely; on malformed output, fall back (e.g., minimal neutral scores or retry depending on implementation choices).
+
+Design Principles:
+- Stable temperature to minimize variance.
+- Compact instructions to reduce prompt length and ambiguity.
+- Encourages explicit numeric scoring to simplify fusion.
+
+LLM Score Semantics:
+- `instruction`: Faithfulness to explicit directives.
+- `hallucination`: Degree of speculative / fabricated content (non-factual assertions unsupported by prompt).
+- `assumption`: Degree of extrapolation beyond provided info.
+- `coherence`: Structural & logical continuity.
+
+Note: The raw hallucination score is kept as “risk magnitude”. Only the frontend inverts it for presentation.
+
+---
+## 6. Fusion Algorithm
+Objective: Combine complementary strengths:
+- Heuristics: Low-cost, consistent, but shallow.
+- LLM: Rich semantic understanding, potentially noisy or inconsistent.
+
+Simplified Fusion Logic:
+```
+// Given: heuristic_dim, llm_dim in [0,1], confidence in (0,1]
+flat = all LLM dims identical?
 baseWeight = flat ? 0.15 : 0.5
 wLLM = clamp(baseWeight * confidence, 0.05, 0.85)
 wHeu = 1 - wLLM
 fused_dim = wHeu * heuristic_dim + wLLM * llm_dim
 ```
-Confidence can factor in:
-- LLM internal self-assessed certainty (if provided)
-- JSON validity / completeness
-- Heuristic agreement (variance penalty)
 
-Outputs: `fused` object containing final per-dimension scores.
+Rationale:
+- If LLM scores collapse (flat) → treat as low information signal → reduce weight.
+- Confidence may derive from JSON validity, absence of missing fields, and internal self‑rating (if provided).
+- Clamping prevents collapse to either pure heuristics or pure LLM.
 
----
-## 9. Data Models (Mongo)
-| Model | Purpose |
-|-------|---------|
-| EvaluationItem | (If used) Individual evaluated prompt/response pair |
-| BatchResult | Stores aggregate + items for a batch evaluation |
-| MetricSnapshot | (Optional) Time-series aggregates for trend UI |
-| PromptTemplate | Future prompt library extensibility |
-| Agent | Registered agent metadata |
-
-Typical stored fields (BatchResult):
-```
-{
-  agent: "local-agent",
-  count: 25,
-  aggregateScores: { instruction, hallucination, assumption, coherence },
-  items: [ { prompt, response, scores, heuristic, llm, fused, latencyMs, ... } ]
-}
-```
+Outputs: Final fused per-dimension scores (0–1). Hallucination inversion for display happens *after* fusion: `displayHall = 1 - fused.hallucination`.
 
 ---
-## 10. API Surface (Essentials)
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/generate/batch` | POST | Generate N responses for a prompt using local provider |
-| `/api/generate/list-models` | GET | Return available local model(s) |
-| `/api/generate/health` | GET | Health & reachability summary |
-| `/api/generate/debug` | GET | Quick generation sanity test |
-| `/api/evaluate/batch` | POST | Evaluate an array of `{agent,prompt,response}` items |
-| `/api/evaluate` | POST | Single item evaluation |
-| `/api/evaluate/leaderboard` | GET | Aggregated leaderboard metrics (implementation dependent) |
+## 7. Qualitative Labels
+Displayed bands (uniform across metrics after inversion):
+| Range | Label |
+|-------|-------|
+| ≥ 0.85 | Excellent |
+| ≥ 0.70 | Good |
+| ≥ 0.50 | Fair |
+| < 0.50 | Poor |
 
-Generation Request Example:
-```json
-POST /api/generate/batch
-{
-  "prompt": "Explain retrieval augmented generation.",
-  "count": 5,
-  "agent": "LocalQwen",
-  "provider": "local",
-  "temperature": 0.7,
-  "max_tokens": 512
-}
+These are applied post‑inversion for hallucination, so interpret consistently across all cards.
+
+---
+## 8. Putting It All Together (Micro Walkthrough)
 ```
-
-Evaluation Batch Example:
-```json
-POST /api/evaluate/batch
-{
-  "items": [
-    { "agent":"LocalQwen", "prompt":"...", "response":"..." },
-    { "agent":"LocalQwen", "prompt":"...", "response":"..." }
-  ]
-}
+Prompt → Generate N responses → For each response:
+  HeuristicExtractor(features) → heuristic scores
+  LLMJudge(prompt,response) → semantic scores + optional explanation
+  Fusion(heuristic, semantic, confidence) → fused scores
+Aggregate(fused over batch) → means per dimension
+Frontend:
+  Display Instruction, Assumption, Coherence directly
+  Display Hallucination Control = 1 - hallucination
+  Render qualitative badges (Excellent/Good/Fair/Poor)
 ```
 
 ---
-## 11. Frontend UX Flow
-- BatchEvaluation: Collect parameters → trigger generation → then evaluation → show aggregate metric cards.
-- MetricCard: Displays score, qualitative label (Excellent/Good/Fair/Poor), and progress bar.
-- Leaderboard: Sortable table + bar chart; hallucination inverted for display.
-- RecentEvaluations: Initially shows most recent batch; expand to reveal history & per-item details (responses + metrics + explanations).
+## 9. Why Invert Hallucination?
+Users instinctively read higher numbers as better. Raw hallucination measures *risk* (higher = worse). Inversion provides uniform cognition and eliminates special‑case color logic in UI components.
 
----
-## 12. Environment Variables
-(See also `backend/LOCAL_PROVIDER_USAGE.md` & `backend/LM_STUDIO_TROUBLESHOOTING.md`)
-
-| Variable | Purpose | Required | Example |
-|----------|---------|----------|---------|
-| `LOCAL_LLM_BASE_URL` | Base URL of LM Studio / local server | Yes | `http://localhost:1234/v1` |
-| `LOCAL_LLM_MODEL` | Model identifier | Yes | `qwen2:7b` |
-| `LOCAL_LLM_API_KEY` | API key if local server enforces auth | No | `abc123` |
-| `LLM_REQUEST_TIMEOUT_MS` | Per-attempt timeout | No | `45000` |
-| `LLM_MAX_RETRIES` | Retry attempts | No | `3` |
-| `LLM_RETRY_BACKOFF_MS` | Base backoff ms | No | `800` |
-| `EVAL_CONCURRENCY` | (If used) parallel evaluators | No | `4` |
-
----
-## 13. Local Development & Setup
-### Prerequisites
-- Node.js (LTS)
-- MongoDB running locally or accessible URI
-- LM Studio (or other OpenAI-compatible local server) with a loaded model
-
-### Install
+Formula:
 ```
-cd backend
-npm install
-cd ../frontend
-npm install
+displayValue = 1 - rawHallucination
 ```
-
-### Run
-Backend (from `backend/`):
-```
-npm start
-```
-Frontend (from `frontend/`):
-```
-npm start
-```
-Access app at: http://localhost:3000 (CRA default) or whichever dev port is configured.
+Where `rawHallucination` is the fused hallucination risk.
 
 ---
-## 14. Typical Usage Walkthrough
-1. Start LM Studio with selected model and note port (e.g., 1234).
-2. Set `.env` in backend with `LOCAL_LLM_BASE_URL` & `LOCAL_LLM_MODEL`.
-3. Run backend + frontend.
-4. Open UI → enter a prompt → set batch size → (optionally adjust temperature & max tokens) → Generate & Evaluate.
-5. View aggregate metrics and inspect detailed items.
-6. Open Leaderboard to compare across past agent runs.
-7. Expand Recent Evaluations to scroll through historical batches.
+## 10. Extending Scoring
+To add a new dimension (example: Factuality):
+1. Add heuristic proxies (e.g., citation density, named entity repetition consistency).
+2. Extend the judging rubric and JSON schema.
+3. Incorporate into fusion loop with its own confidence calibration.
+4. Add UI card + leaderboard column.
+5. (Optional) Decide if inversion is needed based on directionality.
 
 ---
-## 15. Extensibility Guide
-| Goal | Approach |
-|------|----------|
-| Add new dimension | Extend featureExtractor + LLM rubric + fusion + model schema |
-| Plug retrieval grounding | Prepend retrieved context to LLM judge prompt |
-| Swap local model | Change `LOCAL_LLM_MODEL`, ensure compatibility |
-| Add streaming | Implement incremental token consumption & UI stream renderer |
-| Cache evaluations | Hash `{prompt,response}` and store fused result for reuse |
-| Human review loop | Add status field and review queue UI |
+## 11. Quick Start Summary
+1. Start backend & frontend.
+2. Open UI, enter prompt & batch size.
+3. Generate responses.
+4. Trigger evaluation (auto after generation in current flow).
+5. Inspect aggregate & individual scores (remember hallucination is inverted for display).
 
 ---
-## 16. Operational Considerations & Tuning
-| Scenario | Adjustment |
-|----------|------------|
-| Slow generations | Increase timeout, reduce batch size, lower max tokens |
-| Noisy hallucination scores | Calibrate heuristics or adjust LLM prompt constraints |
-| High latency variance | Introduce per-model dynamic timeout or concurrency throttling |
-| Large memory usage | Prune stored raw fields or disable saving full intermediate artifacts |
-
-Monitoring Ideas:
-- Log `latencyMs`, attempts, finish_reason
-- Track p95 latencies for generation and evaluation
-- Flag evaluations where fusion confidence < threshold
+## 12. Notes
+- No environment variable section included per request.
+- For operational tuning consult the internal docs if re-added later.
+- Hallucination values shown are already transformed; raw risk would be accessible only in internal data structures.
 
 ---
-## 17. Troubleshooting
-Generation disconnects, timeouts, or partial outputs: see `backend/LM_STUDIO_TROUBLESHOOTING.md` for deep dive (timeouts, streaming mismatch, concurrency saturation, etc.).
-
-Common Quick Fixes:
-- Increase `LLM_REQUEST_TIMEOUT_MS` for large models
-- Reduce `max_tokens` if truncation frequent
-- Validate base URL matches LM Studio UI
-- Check model name with `/models` endpoint
-
----
-## 18. Roadmap Ideas
-- Adaptive continuation instead of hard truncation (optional “Continue” button)
-- Vector grounding + factuality scoring
-- Bias/fairness dimension
-- Active learning triage for low-confidence items
-- Streaming token-by-token UI
-- Prometheus metrics export + Grafana dashboard
-
----
-## 19. License / Attribution
-Internal / private usage unless a license is added. Add an explicit `LICENSE` file if distributing.
-
----
-## Appendix A: Fusion Rationale
-Heuristics are stable but shallow. LLM scores are rich but noisy. Weighted fusion avoids over-reliance on either, reducing volatility and improving trust in incremental improvements.
-
-## Appendix B: Hallucination Inversion
-Raw hallucination score is a risk metric (higher = worse). To maintain UI consistency, we present a derived metric:
-```
-Hallucination Control = 1 - rawHallucination
-```
-This allows a single “higher is better” mental model across all displayed metrics.
-
----
-Feel free to open an issue or request enhancements (e.g., plugging in multi-provider routing or evaluation version migration tooling).
+Feel free to reintroduce deployment, env, or advanced operations sections later if needed.
