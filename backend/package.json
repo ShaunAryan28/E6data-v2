@@ -11,7 +11,8 @@
     "franc": "^6.2.0",
     "mongoose": "^8.18.1",
     "normalize-text": "^2.6.0",
-    "openai": "^5.20.1"
+    "openai": "^5.20.1",
+    "node-fetch": "^3.3.2"
   },
   "name": "backend",
   "version": "1.0.0",
