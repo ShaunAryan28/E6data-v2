@@ -1,6 +1,6 @@
 import express from "express";
 import { evaluateResponse } from "../services/llmjudge.js";
-import Result from "../models/Result.js"; // retained for single eval endpoint (optional)
+import Result from "../models/result.js"; // retained for single eval endpoint (optional)
 import BatchResult from "../models/batchResult.js";
 import EvaluationItem from "../models/EvaluationItem.js";
 import { hybridEvaluate } from "../eval/hybridJudge.js";
