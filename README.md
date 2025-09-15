@@ -1,8 +1,5 @@
-npm start
-npm start
-# E6data Evaluation Platform (Simplified Overview)
 
-Focused documentation covering only what you asked for: setup, execution flow, and a thorough explanation of scoring & judging (heuristics, LLM layer, fusion, and inversion logic). All environment variable specifics and extended operational sections have been intentionally removed.
+# E6data Evaluation Platform 
 
 ---
 ## 1. Setup (Minimal)
